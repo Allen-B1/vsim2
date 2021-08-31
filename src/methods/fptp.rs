@@ -2,7 +2,7 @@ use crate::*;
 use std::collections::{HashMap,HashSet};
 use std::iter::Iterator;
 
-struct FPTP;
+pub struct FPTP;
 
 impl VotingMethod for FPTP {
     fn run(&self, stage: &ElectionStage, r: &ElectionResults) -> SeatResult {

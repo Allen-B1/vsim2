@@ -62,7 +62,7 @@ pub fn from_zip(reader: impl io::Read + io::Seek) -> Result<(crate::ElectionStag
                     type_: crate::PartyType::Other,
                 },
                 "Green Party" => crate::Party {
-                    name: "Green Party".to_string(),
+                    name: "Green".to_string(),
                     color: 0x3d9b35,
                     type_: crate::PartyType::Green,
                 },
