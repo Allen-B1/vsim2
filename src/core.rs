@@ -4,7 +4,7 @@ use serde::ser::{SerializeTuple};
 use serde::de::{self, Visitor};
 use std::fmt;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Date {
     pub year: u32,
     pub month: u8,
@@ -46,7 +46,7 @@ impl<'de> Deserialize<'de> for Date {
 }
 
 //= Data before the election =//
-#[derive(Serialize,Deserialize)]
+#[derive(Debug,Clone, Serialize,Deserialize)]
 pub  struct ElectionStage {
     pub districts: Vec<District>,
     pub areas: Vec<Area>,
@@ -54,26 +54,26 @@ pub  struct ElectionStage {
     pub parties: Vec<Party>,
 }
 
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug, Clone,Serialize,Deserialize)]
 pub  struct Area {
     pub name: String,
     pub districts: HashSet<usize>,
 }
 
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub  struct District {
     pub name: String,
     pub candidates: HashSet<usize>,
     pub size: u8,
 }
 
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub  struct Candidate {
     pub name: String,
     pub party: Option<usize>,
 }
 
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub  struct Party {
     pub name: String,
     #[serde(rename = "type")]
@@ -81,7 +81,7 @@ pub  struct Party {
     pub color: u32,
 }
 
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug,Copy, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PartyType {
     Left,
@@ -100,18 +100,18 @@ impl Default for PartyType {
 }
 
 //= Data after the election =//
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct ElectionResults {
     pub results: Vec<DistrictResult>,
     pub date: Date,
 }
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct DistrictResult {
     pub votes: HashMap<usize, u32>,
 }
 
 //= Data after voting method =//
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct SeatResult {
     pub seats: HashSet<usize>,
 }

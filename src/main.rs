@@ -2,6 +2,7 @@ mod core;
 mod source;
 mod stats;
 mod methods;
+mod app;
 pub use crate::core::*;
 
 use std::{io, fs};
@@ -40,6 +41,9 @@ fn stats() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn main() {
-    println!("Hello, world!");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use iced::{Application,Settings};
+    <app::State as Application>::run(Settings::default())?;
+
+    Ok(())
 }
