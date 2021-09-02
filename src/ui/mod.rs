@@ -1,11 +1,15 @@
 use crate::*;
+use std::sync::{Arc,Weak};
 use yew::prelude::*;
+
+mod district_info;
+mod map;
 
 #[derive(Clone)]
 pub struct Model {
     link: ComponentLink<Self>,
-    stage: Option<ElectionStage>,
-    results: Option<ElectionResults>,
+    stage: Option<Arc<ElectionStage>>,
+    results: Option<Arc<ElectionResults>>,
     district: Option<usize>,
 }
 
@@ -13,6 +17,7 @@ pub struct Model {
 pub enum Msg {
     SelectDistrict(usize)
 }
+
 impl Component for Model {
     type Message = Msg;
     type Properties = ();
@@ -24,8 +29,8 @@ impl Component for Model {
         
         Model {
             link,
-            stage: Some(serde_json::from_slice(stage_bytes).unwrap()),
-            results: Some(serde_json::from_slice(results_bytes).unwrap()),
+            stage: Some(Arc::new(serde_json::from_slice(stage_bytes).unwrap())),
+            results: Some(Arc::new(serde_json::from_slice(results_bytes).unwrap())),
             district: None,
         }
     }
@@ -49,17 +54,25 @@ impl Component for Model {
                 {
                     if let Some(stage) = &self.stage {
                         html!(
-                            <div class="map">
-                                { for stage.areas.iter().map(|area| html!(<div class="area"></div>))}
-                            </div>
+                            <>
+                                <map::Map
+                                stage=Arc::downgrade(stage) results=self.results.as_ref().map(Arc::downgrade).unwrap_or(Weak::new()) district=self.district
+                                root=self.link.clone()></map::Map>
+                                <district_info::Info
+                                    stage=Arc::downgrade(stage) results=self.results.as_ref().map(Arc::downgrade).unwrap_or(Weak::new()) district=self.district>
+                                </district_info::Info>
+                            </>
                         )
                     } else {
-                        html!(
-                            <div class="status">{"Loading"}</div>
-                        )
+                        html!(<div class="status">{"Loading..."}</div>)
                     }
                 }
             </main>
         )
     }
+}
+
+
+fn color_to_hex(clr: u32) -> String {
+    format!("#{:06x}", clr & 0xffffff)
 }

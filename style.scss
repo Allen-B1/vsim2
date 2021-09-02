@@ -1,0 +1,82 @@
+:root {
+    font-family: sans-serif;   
+}
+
+main {
+    display: flex;
+    flex-direction: row;
+}
+
+.dinfo {
+    flex-basis: 512px;
+    flex-shrink: 0;
+}
+
+.map {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    flex-grow: 1;
+}
+
+.map-area {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.map-area-districts {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.map-district {
+    width: 32px;
+    flex-basis: 32px;
+    height: 32px;
+    text-align: center;
+    background: #aaa;
+    color: #fff;
+    margin: 4px;
+    font-size: 14px;
+    line-height: 32px;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+.map-district.selected {
+    outline: 2px solid #111;
+}
+
+.map-area-name {
+    font-size: 16px;
+    margin: 0;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.dinfo h5 {
+    font-size: 24px;
+    text-align: center;
+    margin: 16px;
+}
+
+.dinfo-candidate {
+    display: flex;
+
+    & .name {
+        flex-grow: 1;
+    }
+
+    & .party {
+        width: 192px;
+        margin: 0 8px;
+    }
+
+    & .votes {
+        width: 64px;
+    }
+
+}
