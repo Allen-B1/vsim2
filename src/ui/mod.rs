@@ -10,6 +10,7 @@ pub struct Model {
     link: ComponentLink<Self>,
     stage: Option<Arc<ElectionStage>>,
     results: Option<Arc<ElectionResults>>,
+    groupings: Option<Arc<Groupings>>,
     district: Option<DistrictID>,
 }
 
@@ -23,14 +24,13 @@ impl Component for Model {
     type Properties = ();
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let stage_bytes = include_bytes!("../../dataset/canada-2019/stage.json");
-        let results_bytes = include_bytes!("../../dataset/canada-2019/results.json");
-
+        let (stage, results, groupings) = core::decode(&mut &include_bytes!("../../dataset/canada-2019/data.elc")[..]).unwrap();
         
         Model {
             link,
-            stage: Some(Arc::new(serde_json::from_slice(stage_bytes).unwrap())),
-            results: Some(Arc::new(serde_json::from_slice(results_bytes).unwrap())),
+            stage: Some(Arc::new(stage)),
+            results: Some(Arc::new(results)),
+            groupings: Some(Arc::new(groupings)),
             district: None,
         }
     }

@@ -6,6 +6,8 @@ use serde::ser::{SerializeTuple};
 use serde::de::{self, Visitor};
 use std::fmt;
 
+extern crate rmp_serde as rmps;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Date {
     pub year: u32,
@@ -145,6 +147,8 @@ impl Grouping {
     }
 }
 
+pub type Groupings = HashMap<u32, Grouping>;
+
 //= Data after the election =//
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct ElectionResults {
@@ -167,4 +171,13 @@ pub struct SeatResult {
 pub trait VotingMethod {
     fn district_size(&self) -> u32;
     fn run(&self, stage: &ElectionStage, r: &ElectionResults, g: &Grouping) -> SeatResult;
+}
+
+
+pub fn encode(w: &mut (impl std::io::Write + ?Sized), data: (&ElectionStage, &ElectionResults, &HashMap<u32, Grouping>)) -> Result<(), rmps::encode::Error> {
+    data.serialize(&mut rmps::Serializer::new(w))
+}
+
+pub fn decode(r: &mut (impl std::io::Read + ?Sized)) -> Result<(ElectionStage, ElectionResults, HashMap<u32, Grouping>), rmps::decode::Error> {
+    Deserialize::deserialize(&mut rmps::Deserializer::new(r))
 }
