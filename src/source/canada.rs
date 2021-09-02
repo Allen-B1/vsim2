@@ -1,11 +1,12 @@
 use std::io;
 use serde::{Deserialize};
 use std::collections::{HashMap,HashSet};
+use crate::core::*;
 
 #[derive(Deserialize)]
 struct PollRecord {
     #[serde(rename = "Electoral District Number/Numéro de circonscription")]
-    district_id: u32,
+    district_id: DistrictID,
 
     #[serde(rename = "Electoral District Name_English/Nom de circonscription_Anglais")]
     district_name: String,
@@ -26,7 +27,7 @@ struct PollRecord {
     votes: u32
 }
 
-pub fn from_zip(reader: impl io::Read + io::Seek) -> Result<(crate::ElectionStage, crate::ElectionResults), Box<dyn std::error::Error>> {
+pub fn from_zip(reader: impl io::Read + io::Seek, date: Date) -> Result<(crate::ElectionStage, crate::ElectionResults, HashMap<u32, Grouping>), Box<dyn std::error::Error>> {
     let mut archive = zip::ZipArchive::new(reader)?; 
     let mut records: Vec<PollRecord> = Vec::new();
     for i in 0..archive.len() {
@@ -37,6 +38,7 @@ pub fn from_zip(reader: impl io::Read + io::Seek) -> Result<(crate::ElectionStag
             records.push(result?);
         }
     }
+
     let mut parties: HashMap<String, crate::Party> = HashMap::new();
     for record in records.iter() {
         if let None = parties.get(&record.party) {
@@ -52,7 +54,7 @@ pub fn from_zip(reader: impl io::Read + io::Seek) -> Result<(crate::ElectionStag
                     type_: crate::PartyType::Liberal,
                 },
                 "NDP-New Democratic Party" => crate::Party {
-                    name: "NDP".to_string(),
+                    name: "New Democrats".to_string(),
                     color: 0xef7c00,
                     type_: crate::PartyType::SocialDemocratic,
                 },
@@ -77,105 +79,94 @@ pub fn from_zip(reader: impl io::Read + io::Seek) -> Result<(crate::ElectionStag
         }
     }
 
-    let parties_order = parties.keys().map(Clone::clone).collect::<Vec<String>>();
-    let parties_idx = parties_order.iter().enumerate().map(|(i, v)| (v.clone(), i)).collect::<HashMap<String, usize>>();
-    let parties_vec = parties_order.iter().map(|name| parties[name].clone()).collect::<Vec<crate::Party>>();
+    let parties_ids: HashMap<String, PartyID> = parties.keys().map(Clone::clone).enumerate().map(|(a, b)| (b, a as PartyID)).collect();
+    let parties: HashMap<PartyID, Party> = parties.into_iter().map(|(s, party)| (parties_ids[&s], party)).collect();
 
-    let mut candidates_map: HashMap<String, crate::Candidate> = HashMap::new();
+    let mut candidates: HashMap<String, Candidate> = HashMap::new();
     let mut candidates_votes: HashMap<String, u32> = HashMap::new();
     for record in records.iter() {
         let name = format!("{}{}{} {}", &record.candidate_name_first, if record.candidate_name_middle.is_empty() { "" } else { " " }, &record.candidate_name_middle, &record.candidate_name_last);
 
-        if let None = candidates_map.get(&name) {
-            candidates_map.insert(name.clone(), crate::Candidate {
-                name: name.clone(),
-                party: parties_idx.get(&record.party).map(|r| *r),
+        if let None = candidates.get(&name) {
+            candidates.insert(name.clone(), crate::Candidate {
+                name: Some(name.clone()),
+                party: parties_ids.get(&record.party).map(|r| *r),
             });
         }
 
         *candidates_votes.entry(name).or_insert(0) += record.votes;
     }
-    let candidates_order = candidates_map.keys().map(Clone::clone).collect::<Vec<String>>();
-    let candidates_vec = candidates_order.iter().map(|name| candidates_map[name.as_str()].clone()).collect::<Vec<crate::Candidate>>();
-    let candidates_idx = candidates_order.iter().enumerate().map(|(i, v)| (v.clone(), i)).collect::<HashMap<String, usize>>();
+    let candidates_ids: HashMap<String, CandidateID> = candidates.keys().map(Clone::clone).enumerate().map(|(a, b)| (b, a as CandidateID)).collect();
+    let candidates: HashMap<CandidateID, Candidate> = candidates.into_iter().map(|(name, candidate)| (candidates_ids[&name], candidate)).collect();
 
-    let mut districts_map: HashMap<u32, crate::District> = HashMap::new();
+    let mut districts: HashMap<DistrictID, crate::District> = HashMap::new();
     for record in records.iter() {
-        if let None = districts_map.get(&record.district_id) {
-            districts_map.insert(record.district_id, crate::District {
+        if let None = districts.get(&record.district_id) {
+            districts.insert(record.district_id, crate::District {
                 name: record.district_name.clone(),
                 candidates: HashSet::new(),
-                size: 1,                
+                seats: 1,                
             });
         }
 
         let name = format!("{}{}{} {}", &record.candidate_name_first, if record.candidate_name_middle.is_empty() { "" } else { " " }, &record.candidate_name_middle, &record.candidate_name_last);
-        let candidate_idx = *candidates_idx.get(&name).unwrap();
-        let district: &mut crate::District = districts_map.get_mut(&record.district_id).unwrap();
+        let candidate_idx = *candidates_ids.get(&name).unwrap();
+        let district: &mut crate::District = districts.get_mut(&record.district_id).unwrap();
         if !district.candidates.contains(&candidate_idx) {
             district.candidates.insert(candidate_idx);
         }
     }
-    let districts_order = districts_map.keys().map(Clone::clone).collect::<Vec<u32>>();
-    let districts_vec = districts_order.iter().map(|name| districts_map[&name].clone()).collect::<Vec<crate::District>>();
-    let districts_idx = districts_order.iter().enumerate().map(|(i, v)| (*v, i)).collect::<HashMap<u32, usize>>();
 
-    let mut districts_results: Vec<crate::DistrictResult> = Vec::with_capacity(districts_vec.len());
-    for district in districts_vec.iter() {
-        let mut votes: HashMap<usize, u32> = HashMap::new();
+    let mut districts_results: HashMap<DistrictID, DistrictResult> = HashMap::with_capacity(districts.len());
+    for (&id, district) in districts.iter() {
+        let mut votes: HashMap<CandidateID, u32> = HashMap::new();
         for candidate in district.candidates.iter() {
-            votes.insert(*candidate, candidates_votes[&candidates_order[*candidate]]);
+            votes.insert(*candidate, candidates_votes[candidates[candidate].name.as_ref().unwrap().as_str()]);
         }
-        districts_results.push(crate::DistrictResult { votes });
+        districts_results.insert(id, DistrictResult { votes, list_votes: HashMap::with_capacity(0) });
     }
     
-    let mut areas_vec = ["Newfoundland and Labrador", "Prince Edward Island", "Nova Scotia", "New Brunswick", "Quebec", "Ontario",
-            "Manitoba",
-            "Saskatchewan",
-            "Alberta",
-            "British Columbia",
-            "Yukon",
-            "Northwest Territories",
-            "Nunavut"].iter().map(|name| 
-                crate::Area {
+    let mut areas: HashMap<AreaID, Area> = [
+            (10, "Newfoundland and Labrador"),
+            (11, "Prince Edward Island"),
+            (12, "Nova Scotia"), 
+            (13, "New Brunswick"),
+            (24, "Quebec"),
+            (35, "Ontario"),
+            (46, "Manitoba"),
+            (47, "Saskatchewan"),
+            (48, "Alberta"),
+            (59, "British Columbia"),
+            (60, "Yukon"),
+            (61, "Northwest Territories"),
+            (62, "Nunavut")].into_iter().map(|(id, name)| 
+                (*id, Area {
                     name: name.to_string(),
                     districts: HashSet::new(),
-                }).collect::<Vec<crate::Area>>();
-
-    use std::iter::{FromIterator};
-    use std::array::IntoIter;
-    let areas_idx: HashMap<u32, usize> = HashMap::<u32,usize>::from_iter(IntoIter::new([
-        (10, 0),
-        (11, 1),
-        (12, 2),
-        (13, 3),
-        (24, 4),
-        (35, 5),
-        (46, 6),
-        (47, 7),
-        (48, 8),
-        (59, 9),
-        (60, 10),
-        (61, 11),
-        (62, 12)
-    ]));
+                    candidates: HashMap::with_capacity(0)
+                })).collect();
 
     for record in records.iter() {
-        let area_id = record.district_id / 1000;
-        let area = areas_vec.get_mut(areas_idx[&area_id]).unwrap();
-        area.districts.insert(*districts_idx.get(&record.district_id).unwrap());
+        let area_id = (record.district_id / 1000) as AreaID;
+        let area = areas.get_mut(&area_id).unwrap();
+        area.districts.insert(record.district_id);
     }
+
+    let mut groupings: HashMap<u32, Grouping> = HashMap::new();
+    groupings.insert(1u32, Grouping(districts.keys().map(|&i| {let mut h = HashSet::with_capacity(1); h.insert(i); h }).collect()));
+    // TODO: groupings for 2
 
     return Ok((
         crate::ElectionStage {
-            districts: districts_vec,
-            areas: areas_vec,
-            candidates: candidates_vec,
-            parties: parties_vec,
+            districts,
+            areas,
+            candidates,
+            parties,
         },
         crate::ElectionResults {
             results: districts_results,
-            date: crate::Date { year: 2019, month: 1, day: 1 }
-        }
+            date
+        },
+        groupings,
     ))
 }

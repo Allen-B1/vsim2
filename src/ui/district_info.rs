@@ -7,7 +7,7 @@ use yew::prelude::*;
 pub struct Props {
     pub stage: Weak<ElectionStage>,
     pub results: Weak<ElectionResults>,
-    pub district: Option<usize>,
+    pub district: Option<DistrictID>,
 }
 
 impl PartialEq for Props {
@@ -50,32 +50,54 @@ impl Component for Info {
         let results = self.props.results.upgrade();
 
         if let Some(id) = self.props.district {
-            let district = &stage.districts[id];
+            let district = &stage.districts[&id];
             html!(
                 <div class="dinfo"> 
-                    <h5>{&district.name}</h5>
-                    {{
-                        let mut candidates: Vec<usize> = district.candidates.iter().map(|&x| x).collect();
-                        if let Some(results) = &results {
-                            candidates.sort_by(|a, b|
-                                results.results[id].votes[&b].cmp(&results.results[id].votes[&a])
-                            );
-                        } else {
-                            candidates.sort();
-                        }
-                        candidates.iter().map(|&cid| {
-                            html!(<div class="dinfo-candidate">
-                                <span class="name">{&stage.candidates[cid].name}</span>
-                                <span class="party" style={format!("color:{}", color_to_hex(
-                                    stage.candidates[cid].party.map(|party| stage.parties[party].color).unwrap_or(0xaaaaaa)
-                                ))}>
-                                    {stage.candidates[cid].party.map(|party| stage.parties[party].name.as_str()).unwrap_or("Independent")}</span>
-                                <>{if let Some(results) = &results {
-                                    html!(<span class="votes">{results.results[id].votes[&cid]}</span>)
-                                } else {"".into()}}</>
-                            </div>)
-                        }).collect::<Html>()
-                    }}
+                    <h3>{&district.name}</h3>
+                    <>
+                        {{
+                            let mut candidates: Vec<CandidateID> = district.candidates.iter().map(|&x| x).collect();
+                            if let Some(results) = &results {
+                                candidates.sort_by(|&a, &b|
+                                    results.results[&id].votes[&b].cmp(&results.results[&id].votes[&a])
+                                );
+                            } else {
+                                candidates.sort();
+                            }
+                            candidates.iter().map(|&cid| {
+                                html!(<div class="dinfo-candidate">
+                                    <span class="name">{stage.candidates[&cid].name.as_ref().map(String::as_str).unwrap_or("Candidate")}</span>
+                                    <span class="party" style={format!("color:{}", color_to_hex(
+                                        stage.candidates[&cid].party.map(|party| stage.parties[&party].color).unwrap_or(0xaaaaaa)
+                                    ))}>
+                                        {stage.candidates[&cid].party.map(|party| stage.parties[&party].name.as_str()).unwrap_or("Independent")}</span>
+                                    <>{if let Some(results) = &results {
+                                        html!(<span class="votes">{results.results[&id].votes[&cid]}</span>)
+                                    } else {"".into()}}</>
+                                </div>)
+                            }).collect::<Html>()
+                        }}
+                    </>
+                    <>
+                        {{
+                            if results.is_some() && !results.as_ref().unwrap().results[&id].list_votes.is_empty() {
+                                html!(<>
+                                    <h5>{"List Votes"}</h5>
+                                    {{
+                                        let district_results = &results.as_ref().unwrap().results[&id];
+                                        district_results.list_votes.iter().map(|(&party_id, &votes)| {
+                                            html!(<div class="dinfo-list-votes">
+                                                <span class="party" style={format!("color:{}",stage.parties[&party_id].color)}>{&stage.parties[&party_id].name}</span>
+                                                <span class="votes">{votes}</span>
+                                            </div>)
+                                        }).collect::<Html>()
+                                    }}
+                                </>)
+                            } else {
+                                "".into()
+                            }
+                        }}
+                    </>
                 </div>
             )
         } else {

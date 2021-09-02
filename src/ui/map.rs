@@ -7,7 +7,7 @@ use yew::prelude::*;
 pub struct Props {
     pub stage: Weak<ElectionStage>,
     pub results: Weak<ElectionResults>,
-    pub district: Option<usize>,
+    pub district: Option<DistrictID>,
     pub root: ComponentLink<Model>, // TODO: is this a reference cycle?
 }
 
@@ -54,7 +54,7 @@ impl Component for Map {
         html!(
             <div class="map">
                 {
-                    for stage.areas.iter().map(|area| {
+                    for stage.areas.iter().map(|(&area_id, area)| {
                         html!(
                             <div class="map-area">
                                 <h5 class="map-area-name">{&area.name}</h5>
@@ -62,19 +62,19 @@ impl Component for Map {
                                     {
                                         {
 
-                                            let mut districts = area.districts.iter().map(|&x| x).collect::<Vec<usize>>();
+                                            let mut districts: Vec<DistrictID> = area.districts.iter().map(|&x| x).collect();
                                             districts.sort();
-                                            districts.iter().map(|&id| (id, &stage.districts[id])).map(|(id, district)| {
+                                            districts.iter().map(|&id| (id, &stage.districts[&id])).map(|(id, district)| {
                                                 let mut classes = classes!("map-district");
                                                 if Some(id) == self.props.district {
                                                     classes.push("selected");
                                                 }
                                                 
                                                 html!(<button class=classes onclick=self.link.callback(move |_| Msg::SelectDistrict(id)) style={
-                                                    if let Some(results) = &results { "background:".to_string() + &color_to_hex(results.results[id].votes.iter()
+                                                    if let Some(results) = &results { "background:".to_string() + &color_to_hex(results.results[&id].votes.iter()
                                                         .reduce(|c1, c2| if c1.1 > c2.1 { c1 } else { c2 })
-                                                        .and_then(|(&c, _)| stage.candidates[c].party)
-                                                        .map(|party| stage.parties[party].color)
+                                                        .and_then(|(&c, _)| stage.candidates[&c].party)
+                                                        .map(|party| stage.parties[&party].color)
                                                         .unwrap_or(0xaaaaaa)) } else { "".to_string() }
                                                 }>{abbr(&district.name)}</button>)
                                             }).collect::<Html>()

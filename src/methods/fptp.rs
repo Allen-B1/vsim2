@@ -5,14 +5,29 @@ use std::iter::Iterator;
 pub struct FPTP;
 
 impl VotingMethod for FPTP {
-    fn run(&self, stage: &ElectionStage, r: &ElectionResults) -> SeatResult {
+    fn district_size(&self) -> u32 {
+        1
+    }
+
+    fn run(&self, stage: &ElectionStage, r: &ElectionResults, groupings: &Grouping) -> SeatResult {
         let mut successful = HashSet::new();
-        for (i, district) in stage.districts.iter().enumerate() {
-            let (candidate, votes) = r.results[i].votes.iter().reduce(|(candidate1, votes1), (candidate2, votes2)| if votes1 > votes2 { (candidate1, votes1) } else { (candidate2, votes2) }).unwrap();
-            successful.insert(*candidate);
+        for (gid, districts) in groupings.iter() {
+            let seats: u8 = districts.iter().map(|&id| stage.districts[&id].seats ).sum();
+
+            let mut items = Vec::new();
+            for &district in districts.iter() {
+                for (&candidate, &votes) in &r.results[&district].votes {
+                    items.push((candidate, votes));
+                }
+            }
+
+            items.sort_by(|(c, v), (c2, v2)| v2.cmp(v));
+
+            successful.extend(items.iter().map(|(c, _)| *c).take(seats as usize));
         }
+
         SeatResult{
-            seats: successful,
+            seats: successful
         }
     }
 }

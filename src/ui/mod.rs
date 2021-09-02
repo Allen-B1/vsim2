@@ -10,12 +10,12 @@ pub struct Model {
     link: ComponentLink<Self>,
     stage: Option<Arc<ElectionStage>>,
     results: Option<Arc<ElectionResults>>,
-    district: Option<usize>,
+    district: Option<DistrictID>,
 }
 
 #[derive(Clone)]
 pub enum Msg {
-    SelectDistrict(usize)
+    SelectDistrict(DistrictID)
 }
 
 impl Component for Model {
