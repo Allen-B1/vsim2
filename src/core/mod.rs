@@ -1,5 +1,4 @@
-pub mod stats;
-
+use std::any::Any;
 use std::collections::{HashMap,HashSet};
 use serde::{Serialize,Deserialize,Serializer,Deserializer};
 use serde::ser::{SerializeTuple};
@@ -70,40 +69,66 @@ pub struct ElectionStage {
 }
 
 /// Represents a set of districts, like a province or state.
-#[derive(Debug, Clone,Serialize,Deserialize)]
+/// If the country does not have electorally-relevant provinces or similar,
+/// use one `Area` for the entire country.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Area {
     pub name: String,
+
+    /// `District`s inside of this `Area`
     pub districts: HashSet<DistrictID>,
 
-    /// Party-list candidates. Use an empty `HashMap` is the given country does not have party lists.
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    /// Candidates associated with the given area.
+    /// See `Candidate` for more information on whether to use `Area::candidates` 
+    /// or `District::candidates`.
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
     #[serde(default)]
-    pub candidates: HashMap<PartyID, HashSet<CandidateID>>
+    pub candidates: HashSet<CandidateID>,
 }
 
 /// Represents an electoral district.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct District {
     pub name: String,
-    pub candidates: HashSet<CandidateID>,
     pub seats: u8,
+    pub area: AreaID,
+
+    /// Candidates associated with the given district.
+    /// See `Candidate` for more information on whether to use `Area::candidates` 
+    /// or `District::candidates`.
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
+    #[serde(default)]
+    pub candidates: HashSet<CandidateID>,
 }
 
 /// Represents a candidate.
+///
+/// Candidates running in district-wide elections (e.g. on a local party list,
+/// in local FPTP elections) should be put in `District::candidate`.
+/// Candidates running in area-wide elections (e.g. on a regional party list)
+/// should be put in `Area::district`. Candidates that run in both kinds of
+/// elections (e.g. for MMP - regional party list + local election)
+/// should be put in both `District::candidates` and `Area::candidates`.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct Candidate {
+    /// Name of the candidate.
+    /// `None` if the name data isn't available.
     pub name: Option<String>,
+
+    /// Party of the candidate.
+    /// `None` if the candidate is an independent.
     pub party: Option<PartyID>,
 }
 
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub  struct Party {
+pub struct Party {
     pub name: String,
     #[serde(rename = "type")]
     pub type_: PartyType,
     pub color: u32,
 }
 
+/// Represents the category of a party.
 #[derive(Debug,Copy, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum PartyType {
@@ -150,16 +175,31 @@ impl Grouping {
 pub type Groupings = HashMap<u32, Grouping>;
 
 //= Data after the election =//
+
+/// Represents the election results.
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct ElectionResults {
-    pub results: HashMap<DistrictID, DistrictResult>,
+    pub districts: HashMap<DistrictID, DistrictResults>,
     pub date: Date,
 }
 
+#[derive(Debug,Clone,Serialize,Deserialize,PartialEq, Eq, Hash, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum PartyListSource { Area, District }
+
+/// Represents results in one electoral district.
 #[derive(Debug,Clone,Serialize,Deserialize)]
-pub struct DistrictResult {
-    pub votes: HashMap<CandidateID, u32>,
-    pub list_votes: HashMap<PartyID, u32>,
+pub struct DistrictResults {
+    /// Votes for a party. This should
+    /// only be used in closed party-list PR
+    /// or something similar, where the voter
+    /// votes only for a party. In open-list
+    /// elections, `candidate_votes` should be
+    /// used instead.
+    pub party_votes: HashMap<PartyID, u32>,
+    pub party_list_source: PartyListSource,
+
+    pub candidate_votes: HashMap<CandidateID, u32>,
 }
 
 //= Data after voting method =//
@@ -168,11 +208,14 @@ pub struct SeatResult {
     pub seats: HashSet<CandidateID>,
 }
 
-pub trait VotingMethod {
+pub trait ElectoralMethod: dyn_clone::DynClone + std::any::Any {
     fn district_size(&self) -> u32;
-    fn run(&self, stage: &ElectionStage, r: &ElectionResults, g: &Grouping) -> SeatResult;
+    fn run(&self, stage: &ElectionStage, r: &ElectionResults, g: &Grouping) -> Result<SeatResult, String>;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
+dyn_clone::clone_trait_object!(ElectoralMethod);
 
 pub fn encode(w: &mut (impl std::io::Write + ?Sized), data: (&ElectionStage, &ElectionResults, &HashMap<u32, Grouping>)) -> Result<(), rmps::encode::Error> {
     data.serialize(&mut rmps::Serializer::new(w))
@@ -180,4 +223,33 @@ pub fn encode(w: &mut (impl std::io::Write + ?Sized), data: (&ElectionStage, &El
 
 pub fn decode(r: &mut (impl std::io::Read + ?Sized)) -> Result<(ElectionStage, ElectionResults, HashMap<u32, Grouping>), rmps::decode::Error> {
     Deserialize::deserialize(&mut rmps::Deserializer::new(r))
+}
+
+pub mod utils {
+    use crate::core::*;
+    pub fn party_candidates<'a>(stage: &'a ElectionStage, party: PartyID, candidates: impl Iterator<Item=CandidateID>  + 'a) -> impl Iterator<Item=CandidateID> + 'a {
+        candidates.filter(move |&p| stage.candidates[&p].party == Some(party))
+    }
+
+    pub fn party_list<'a>(stage: &'a ElectionStage, party: PartyID, source: PartyListSource, district: DistrictID) -> impl Iterator<Item=CandidateID> + 'a {
+        utils::party_candidates(stage, party, match source {
+            PartyListSource::Area => stage.areas[&stage.districts[&district].area].candidates.iter(),
+            PartyListSource::District => stage.districts[&district].candidates.iter()
+        }.map(|&x| x))
+    }
+
+    pub fn seats_by_party(stage: &ElectionStage, seats: &SeatResult) -> HashMap<Option<PartyID>, usize> {
+        let mut parties = HashMap::new();
+        for seat_idx in &seats.seats {
+            let item = match stage.candidates[seat_idx].party {
+                Some(party) => Some(party),
+                None => None
+            };
+
+            let new_count = parties.get(&item).unwrap_or(&0) + 1;
+            parties.insert(item, new_count);
+        }
+
+        parties
+    }
 }

@@ -9,8 +9,9 @@ h5 {
 }
 
 main {
-    display: flex;
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto 1fr;
 }
 
 .dinfo {
@@ -100,3 +101,58 @@ main {
         width: 64px;
     }
 }
+
+.parliament {
+    overflow:hidden;
+    position: relative;
+    background: black;
+
+    padding: 0;
+    width: calc(var(--radius)*2); height: var(--radius);
+    border-radius: calc(var(--radius)*2) calc(var(--radius)*2) 0 0 ;
+    list-style: none;  
+    
+    
+    .slice {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: var(--radius);
+      height: var(--radius);
+      
+      transform: rotate(var(--off));
+      transform-origin: bottom right;
+    }
+
+    .blocker {
+      background: #fff;
+      position: absolute;
+      --size: calc(var(--radius) - 50px);
+      
+      width: calc(var(--size)*2);
+      height: calc(var(--size)*2);
+      border-radius: calc(var(--size)*2);
+      top: calc(100% - var(--size));
+      left: calc(50% - var(--size));
+
+      text-align: center;
+      line-height: calc(var(--size)*1.5);
+      font-size: 24px;
+    }
+  }
+
+button {
+    border: 0;
+    padding: 4px 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+  
+  .method-picker {
+    button {
+        background: transparent;        
+    }
+    button.active {
+        background: #ddd;
+    }
+  }

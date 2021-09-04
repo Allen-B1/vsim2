@@ -1,4 +1,6 @@
-use crate::*;
+extern crate vsim2;
+use vsim2::core::*;
+
 use crate::ui::*;
 use std::sync::{Arc,Weak};
 use yew::prelude::*;
@@ -59,20 +61,20 @@ impl Component for Info {
                             let mut candidates: Vec<CandidateID> = district.candidates.iter().map(|&x| x).collect();
                             if let Some(results) = &results {
                                 candidates.sort_by(|&a, &b|
-                                    results.results[&id].votes[&b].cmp(&results.results[&id].votes[&a])
+                                    results.districts[&id].candidate_votes[&b].cmp(&results.districts[&id].candidate_votes[&a])
                                 );
                             } else {
                                 candidates.sort();
                             }
                             candidates.iter().map(|&cid| {
                                 html!(<div class="dinfo-candidate">
-                                    <span class="name">{stage.candidates[&cid].name.as_ref().map(String::as_str).unwrap_or("Candidate")}</span>
+                                    <span class="name">{stage.candidates[&cid].name.as_ref().map(String::clone).unwrap_or(format!("Candidate {}", cid))}</span>
                                     <span class="party" style={format!("color:{}", color_to_hex(
                                         stage.candidates[&cid].party.map(|party| stage.parties[&party].color).unwrap_or(0xaaaaaa)
                                     ))}>
                                         {stage.candidates[&cid].party.map(|party| stage.parties[&party].name.as_str()).unwrap_or("Independent")}</span>
                                     <>{if let Some(results) = &results {
-                                        html!(<span class="votes">{results.results[&id].votes[&cid]}</span>)
+                                        html!(<span class="votes">{results.districts[&id].candidate_votes[&cid]}</span>)
                                     } else {"".into()}}</>
                                 </div>)
                             }).collect::<Html>()
@@ -80,14 +82,19 @@ impl Component for Info {
                     </>
                     <>
                         {{
-                            if results.is_some() && !results.as_ref().unwrap().results[&id].list_votes.is_empty() {
+                            let district_results = &results.as_ref().unwrap().districts[&id];
+                            let mut parties: Vec<_> = district_results.party_votes.keys().map(|&k|k ).collect();
+                            parties.sort_by(|&a, &b| {
+                                district_results.party_votes[&b].cmp(&district_results.party_votes[&a])
+                            });
+                            if results.is_some() && !results.as_ref().unwrap().districts[&id].party_votes.is_empty() {
                                 html!(<>
                                     <h5>{"List Votes"}</h5>
                                     {{
-                                        let district_results = &results.as_ref().unwrap().results[&id];
-                                        district_results.list_votes.iter().map(|(&party_id, &votes)| {
+                                        parties.iter().map(|&party_id| {
+                                            let votes = district_results.party_votes[&party_id];
                                             html!(<div class="dinfo-list-votes">
-                                                <span class="party" style={format!("color:{}",stage.parties[&party_id].color)}>{&stage.parties[&party_id].name}</span>
+                                                <span class="party" style={format!("color:{}",color_to_hex(stage.parties[&party_id].color))}>{&stage.parties[&party_id].name}</span>
                                                 <span class="votes">{votes}</span>
                                             </div>)
                                         }).collect::<Html>()
