@@ -91,13 +91,43 @@ impl Component for Info {
                                 html!(<>
                                     <h5>{"List Votes"}</h5>
                                     {{
-                                        parties.iter().map(|&party_id| {
-                                            let votes = district_results.party_votes[&party_id];
+                                        let format_results = |party_id, votes| {
                                             html!(<div class="dinfo-list-votes">
                                                 <span class="party" style={format!("color:{}",color_to_hex(stage.parties[&party_id].color))}>{&stage.parties[&party_id].name}</span>
                                                 <span class="votes">{votes}</span>
                                             </div>)
-                                        }).collect::<Html>()
+                                        };
+
+                                        let total_votes = district_results.party_votes.iter().map(|(_, &x)| x).sum::<u32>();
+                                        let important_parties = parties.iter().map(|&party_id| {
+                                            let votes = district_results.party_votes[&party_id];
+                                            if votes > total_votes / 50 {
+                                                format_results(party_id, votes)
+                                            } else {
+                                                "".into()
+                                            }
+                                        });
+
+                                        let total_other_votes = district_results.party_votes.iter().map(|(_, &x)| x).filter(|&x| x <= total_votes / 50).sum::<u32>();
+                                        let unimportant_parties = html!(
+                                            <div class="dinfo-list-other">
+                                            <div class="dinfo-list-votes dinfo-list-votes-other">
+                                                <span class="party">{"Other"}</span> <span class="votes">{total_other_votes}</span>
+                                            </div>
+                                            {
+                                                for parties.iter().map(|&party_id| {
+                                                    let votes = district_results.party_votes[&party_id];
+                                                    if votes <= total_votes / 50 {
+                                                        format_results(party_id, votes)
+                                                    } else {
+                                                        "".into()
+                                                    }
+                                                })
+                                            }
+                                            </div>
+                                        );
+
+                                        important_parties.chain(std::iter::once(unimportant_parties)).collect::<Html>()
                                     }}
                                 </>)
                             } else {
