@@ -59,6 +59,8 @@ pub type AreaID = u16;
 pub type CandidateID = u32;
 pub type PartyID = u8;
 
+pub type SeatCount = u16;
+
 /// Represents data before the election.
 #[derive(Debug,Clone, Serialize,Deserialize)]
 pub struct ElectionStage {
@@ -75,6 +77,11 @@ pub struct ElectionStage {
 pub struct Area {
     pub name: String,
 
+    /// Number of seats allocated to this `Area` in the original
+    /// dataset that are not associated with a specific
+    /// electoral district. If none, should be `0`.
+    pub seats: SeatCount,
+
     /// `District`s inside of this `Area`
     pub districts: HashSet<DistrictID>,
 
@@ -90,7 +97,7 @@ pub struct Area {
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct District {
     pub name: String,
-    pub seats: u8,
+    pub seats: SeatCount,
     pub area: AreaID,
 
     /// Candidates associated with the given district.
@@ -207,7 +214,6 @@ pub struct DistrictResults {
 pub struct SeatResult {
     pub seats: HashSet<CandidateID>,
 }
-
 pub trait ElectoralMethod: dyn_clone::DynClone + std::any::Any {
     fn district_size(&self) -> u32;
     fn run(&self, stage: &ElectionStage, r: &ElectionResults, g: &Grouping) -> Result<SeatResult, String>;
@@ -226,6 +232,8 @@ pub fn decode(r: &mut (impl std::io::Read + ?Sized)) -> Result<(ElectionStage, E
 }
 
 pub mod utils {
+    use std::cmp::Ordering;
+
     use crate::core::*;
     pub fn party_candidates<'a>(stage: &'a ElectionStage, party: PartyID, candidates: impl Iterator<Item=CandidateID>  + 'a) -> impl Iterator<Item=CandidateID> + 'a {
         candidates.filter(move |&p| stage.candidates[&p].party == Some(party))
@@ -251,5 +259,21 @@ pub mod utils {
         }
 
         parties
+    }
+
+    pub fn allocate_sainte_lague(pops: &[u32], seats: SeatCount) -> Box<[SeatCount]> {
+        let total_pop: u32 = pops.iter().sum();
+        let mut seat_arr = vec![0 as SeatCount; pops.len()].into_boxed_slice();
+
+        while seat_arr.iter().map(|&x| x).sum::<SeatCount>() < seats {
+            let mut quotients = vec![0f64;pops.len()].into_boxed_slice();
+            for (i, &pop) in pops.iter().enumerate() {
+                quotients[i] = pops[i] as f64 / (2*seat_arr[i] + 1) as f64;
+            }
+
+            seat_arr[quotients.iter().enumerate().max_by(|(_, &val), (_, &val2)| PartialOrd::partial_cmp(&val, &val2).unwrap()).unwrap().0] += 1;
+        }
+
+        seat_arr
     }
 }

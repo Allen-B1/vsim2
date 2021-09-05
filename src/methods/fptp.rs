@@ -17,7 +17,7 @@ impl ElectoralMethod for FPTP {
     fn run(&self, stage: &ElectionStage, r: &ElectionResults, groupings: &Grouping) -> Result<SeatResult, String> {
         let mut successful = HashSet::new();
         for (gid, districts) in groupings.iter() {
-            let seats: u8 = districts.iter().map(|&id| stage.districts[&id].seats).sum();
+            let seats: SeatCount = districts.iter().map(|&id| stage.districts[&id].seats).sum();
 
             let mut total_candidates_votes = Vec::new();
             for &district in districts.iter() {

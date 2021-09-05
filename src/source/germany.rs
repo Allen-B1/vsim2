@@ -56,6 +56,7 @@ pub fn from_csv(reader: impl io::Read + io::Seek) -> Result<(ElectionStage, Elec
         pub id: usize,
         pub name: usize,
         pub parent: usize,
+        pub population: usize,
         pub parties: HashMap<PartyID, usize>,
     }
 
@@ -63,6 +64,7 @@ pub fn from_csv(reader: impl io::Read + io::Seek) -> Result<(ElectionStage, Elec
     let mut date: Option<Date> = None;
 
     let mut parties = HashMap::new();
+    let mut areas_pop = HashMap::new();
     let mut areas = HashMap::new();
     let mut districts = HashMap::new();
     let mut district_results = HashMap::new();
@@ -94,7 +96,8 @@ pub fn from_csv(reader: impl io::Read + io::Seek) -> Result<(ElectionStage, Elec
                     "Nr" => pos.id = i,
                     "Gebiet" => pos.name = i,
                     "gehört zu" => pos.parent = i,
-                    "Wahlberechtigte" | "Wähler" | "Ungültige" | "Gültige" => continue,
+                    "Wahlberechtigte" => pos.population = i,
+                    "Wähler" | "Ungültige" | "Gültige" => continue,
                     "" => continue,
                     _ => {
                         let party_data = match value {
@@ -134,13 +137,16 @@ pub fn from_csv(reader: impl io::Read + io::Seek) -> Result<(ElectionStage, Elec
             areas.insert(id as AreaID, Area {
                 name: name,
                 districts: HashSet::new(),
-                candidates: HashSet::new()
+                candidates: HashSet::new(),
+                seats: 0
             });
+            let pop = record.get(pos.population).ok_or(Error::Custom("Wahlberechtigte col not present".into()))?.parse::<u32>().map_err(|err| Error::Parse(err, "population couldn't be parsed".into()))?;
+            areas_pop.insert(id as AreaID, pop);
         } else {
             let mut district = District {
                 name,
                 area: parent,
-                seats: 2,
+                seats: 1,
                 candidates: HashSet::new(),
             };
 
@@ -198,12 +204,23 @@ pub fn from_csv(reader: impl io::Read + io::Seek) -> Result<(ElectionStage, Elec
     }
 
     let mut groupings = HashMap::new();
-    groupings.insert(2u32, Grouping(districts.keys().map(|&i| {let mut h = HashSet::with_capacity(1); h.insert(i); h }).collect()));
+    groupings.insert(1u32, Grouping(districts.keys().map(|&i| {let mut h = HashSet::with_capacity(1); h.insert(i); h }).collect()));
+
+    {
+        dbg!((districts.len() * 2) as SeatCount);
+        let areas_sorted = areas.keys().map(|&x| x).collect::<Vec<_>>();
+        let areas_pop_vec = areas_sorted.iter().map(|&area| areas_pop[&area]).collect::<Vec<_>>();
+        let areas_seats = utils::allocate_sainte_lague(&areas_pop_vec, (districts.len() * 2) as SeatCount);
+        for (idx, &seats) in areas_seats.iter().enumerate() {
+            let local_seats = areas[&areas_sorted[idx]].districts.len() as SeatCount;
+            areas.get_mut(&areas_sorted[idx]).unwrap().seats = seats - local_seats;
+        }
+    }
 
     return Ok((
         ElectionStage {
             candidates, areas, districts, parties
-        },
+        },  
         ElectionResults {
             date: date.unwrap(),
             districts: district_results

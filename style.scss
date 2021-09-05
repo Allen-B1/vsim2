@@ -102,6 +102,10 @@ main {
     }
 }
 
+.parliament-container {
+    justify-self: end;
+}
+
 .parliament {
     overflow:hidden;
     position: relative;
@@ -117,11 +121,11 @@ main {
       position: absolute;
       top: 0;
       left: 0;
-      width: var(--radius);
+      width: calc(var(--radius) * 2);
       height: var(--radius);
       
       transform: rotate(var(--off));
-      transform-origin: bottom right;
+      transform-origin: bottom center;
     }
 
     .blocker {

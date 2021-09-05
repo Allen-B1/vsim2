@@ -140,11 +140,12 @@ pub fn from_zip(reader: impl io::Read + io::Seek, date: Date) -> Result<(Electio
             (59, "British Columbia"),
             (60, "Yukon"),
             (61, "Northwest Territories"),
-            (62, "Nunavut")].into_iter().map(|(id, name)| 
+            (62, "Nunavut")].iter().map(|(id, name)| 
                 (*id, Area {
                     name: name.to_string(),
                     districts: HashSet::new(),
-                    candidates: HashSet::with_capacity(0)
+                    candidates: HashSet::with_capacity(0),
+                    seats: 0,
                 })).collect();
 
     for (&district_id, district) in districts.iter() {
